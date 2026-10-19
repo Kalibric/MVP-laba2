@@ -15,7 +15,7 @@ type m struct {
 func main() {
 	var (
 		n         uint16
-		n_counter         = []uint16{10}
+		n_counter         = []uint16{5, 10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240}
 		a         float64 = 0
 		b         float64 = math.Pi
 
@@ -23,20 +23,27 @@ func main() {
 		resultM []float64
 		lambda  []float64
 		mu      []float64
+
+		currentDelta, ocDelta, K float64
+		prevM                    []float64
+		prevN                    uint16
+		prevDelta                float64
 	)
+
 	for _, n = range n_counter {
 		M = genM(a, b, n)
 		lambda, mu = forwardSweep(M)
 		resultM = backwardSweep(M, lambda, mu)
-
-		fmt.Println(resultM)
+		currentDelta = delta(a, b, n, resultM)
+		if prevN != 0 {
+			ocDelta = estmateDelta(a, b, prevN, n, prevM, resultM)
+			K = prevDelta / currentDelta
+		}
+		fmt.Println(n, currentDelta, ocDelta, K)
+		prevM = resultM
+		prevN = n
+		prevDelta = currentDelta
 	}
-
-	fmt.Println(S3(1, resultM, a, b, n))
-}
-
-func d2f(value float64) float64 {
-	return -math.Sin(value)
 }
 
 func genM(a float64, b float64, n uint16) []m {
@@ -128,4 +135,37 @@ func S3(x float64, M []float64, a float64, b float64, n uint16) float64 {
 		(m_2*math.Pow(x-x_1, 3))/(h*6) +
 		(y_1-(m_1*h*h)/6)*((x_2-x)/h) +
 		(y_2-(m_2*h*h)/6)*((x-x_1)/h)
+}
+
+func delta(a float64, b float64, n uint16, M []float64) float64 {
+	h := (b - a) / float64(n)
+	var (
+		currentDelta, x float64
+		maxDelta        float64 = 0.
+	)
+	for i := 0; i < int(n); i++ {
+		x = a + (float64(i)+0.5)*h
+		currentDelta = S3(x, M, a, b, n)
+		if maxDelta < math.Abs(f(x)-currentDelta) {
+			maxDelta = math.Abs(f(x) - currentDelta)
+		}
+	}
+	return maxDelta
+}
+
+func estmateDelta(a, b float64, prevN, n uint16, M1, M2 []float64) float64 {
+	h := (b - a) / float64(prevN)
+	var (
+		x, currentDeltaM1, currentDeltaM2 float64
+		maxDelta                          float64 = 0.
+	)
+	for i := 0; i < int(prevN); i++ {
+		x = a + (float64(i)+0.5)*h
+		currentDeltaM1 = S3(x, M1, a, b, prevN)
+		currentDeltaM2 = S3(x, M2, a, b, n)
+		if math.Abs(currentDeltaM1-currentDeltaM2) > maxDelta {
+			maxDelta = math.Abs(currentDeltaM1 - currentDeltaM2)
+		}
+	}
+	return maxDelta / 16
 }
